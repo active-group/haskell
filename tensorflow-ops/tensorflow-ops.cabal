@@ -1,5 +1,5 @@
 name:                tensorflow-ops
-version:             0.2.0.0
+version:             0.2.0.1
 synopsis:            Friendly layer around TensorFlow bindings.
 description:         Please see README.md
 homepage:            https://github.com/tensorflow/haskell#readme
@@ -21,13 +21,13 @@ library
                  , TensorFlow.NN
                  , TensorFlow.Queue
                  , TensorFlow.Variable
-  build-depends:  proto-lens == 0.4.*
+  build-depends:  proto-lens == 0.6.*
                 , base >= 4.7 && < 5
                 , bytestring
                 , fgl
                 , mtl
                 , data-default
-                , lens-family
+                , lens-family == 2.*
                 , containers
                 , tensorflow == 0.2.*
                 , tensorflow-proto == 0.2.*
