@@ -11,8 +11,12 @@
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
+
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module TensorFlow.Minimize
@@ -20,6 +24,7 @@ module TensorFlow.Minimize
   , minimizeWith
   , gradientDescent
   , gradientDescentRef
+  , OneOfAdamDataTypes
   , AdamConfig(..)
   , adam
   , adam'
@@ -27,10 +32,13 @@ module TensorFlow.Minimize
   , adamRef'
   ) where
 
-import           Control.Monad       (zipWithM)
-import           Data.Default        (Default (..))
-import           Data.List           (zipWith4)
-import           Data.Maybe          (fromMaybe)
+import Data.Complex (Complex)
+import Data.Int (Int8,Int16,Int32,Int64)
+import Data.Word (Word8,Word16,Word32,Word64)
+import Control.Monad (zipWithM)
+import Data.Default (Default(..))
+import Data.List (zipWith4)
+import Data.Maybe (fromMaybe)
 
 import qualified TensorFlow.Core     as TF
 import qualified TensorFlow.Gradient as TF
@@ -89,16 +97,20 @@ gradientDescentRef ::
   -> Minimizer (TF.Tensor TF.Ref) a m
 gradientDescentRef = minimizer TFO.assignAdd
 
--- TODO: Support more than Float in adam.
-data AdamConfig = AdamConfig
-  { adamLearningRate :: Float
-  , adamBeta1        :: Float
-  , adamBeta2        :: Float
-  , adamEpsilon      :: Float
-  }
+data AdamConfig t = AdamConfig
+    { adamLearningRate :: t
+    , adamBeta1        :: t
+    , adamBeta2        :: t
+    , adamEpsilon      :: t
+    }
 
+type OneOfAdamDataTypes t =
+        TF.OneOf '[ Complex Double, Complex Float
+                  , Int16, Int32, Int64, Int8, Word16, Word32, Word64, Word8
+                  , Double, Float] t
+
+instance Fractional t => Default (AdamConfig t) where
   -- Recommended defaults from the adam paper.
-instance Default AdamConfig where
   def = AdamConfig 0.001 0.9 0.999 1e-8
 
 -- | Perform one step of the adam algorithm for `TF.Variable`.
@@ -106,10 +118,10 @@ instance Default AdamConfig where
 -- See https://arxiv.org/abs/1412.6980.
 --
 -- NOTE: Currently requires all 'TF.Variable's to have an 'TF.initializedValue'.
-adam :: Minimizer TF.Variable Float TF.Build
+adam :: (OneOfAdamDataTypes t, Fractional t) => Minimizer TF.Variable t TF.Build
 adam = adam' def
 
-adam' :: AdamConfig -> Minimizer TF.Variable Float TF.Build
+adam' :: (OneOfAdamDataTypes t, Fractional t) => AdamConfig t -> Minimizer TF.Variable t TF.Build
 adam' config =
   let errorMsg = "TensorFlow.Minimize.adam requires an initial value for all variables"
       initVal = fromMaybe (error errorMsg) . TF.initializedValue
@@ -121,7 +133,7 @@ adam' config =
         TF.readValue
         TF.assign
 
-adamRef :: [TF.Shape] -> Minimizer (TF.Tensor TF.Ref) Float TF.Build
+adamRef :: (OneOfAdamDataTypes t, Fractional t) => [TF.Shape] -> Minimizer (TF.Tensor TF.Ref) t TF.Build
 adamRef = adamRef' def
 
 -- | Perform one step of the adam algorithm for `TF.Tensor TF.Ref`.
@@ -129,7 +141,7 @@ adamRef = adamRef' def
 --   Similar solution as for `TF.Variable` works sometimes...
 --   Creating initialized variables the same as for `TF.Variable` is `(TFO.initializedVariable . TF.zerosLike . TF.value)`
 --   but gives many times runtime error: "attempting to use uninitialized value variable"
-adamRef' :: AdamConfig -> [TF.Shape] -> Minimizer (TF.Tensor TF.Ref) Float TF.Build
+adamRef' :: (OneOfAdamDataTypes t, Fractional t) => AdamConfig t -> [TF.Shape] -> Minimizer (TF.Tensor TF.Ref) t TF.Build
 adamRef' config shapes =
   adam''
     config
@@ -139,14 +151,14 @@ adamRef' config shapes =
     TF.expr
     TFO.assign
 
-adam'' :: forall t n . (TF.Nodes n, TF.ToTensor t, TF.Rendered t) =>
-     AdamConfig
-  -> ([t Float] -> TF.Build [t Float])
-  -> (TF.Tensor TF.Build Float -> TF.Build (t Float))
-  -> (t Float -> t Float -> t Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Build Float -> TF.Tensor TF.Value Float -> TF.Build n)
-  -> (t Float -> TF.Tensor TF.Build Float)
-  -> (t Float -> TF.Tensor TF.Build Float -> TF.Build n)
-  -> Minimizer t Float TF.Build
+adam'' :: forall t a n . (TF.Nodes n, TF.ToTensor t, TF.Rendered t, OneOfAdamDataTypes a, Fractional a) =>
+     AdamConfig a
+  -> ([t a] -> TF.Build [t a])
+  -> (TF.Tensor TF.Build a -> TF.Build (t a))
+  -> (t a -> t a -> t a -> TF.Tensor TF.Build a -> TF.Tensor TF.Build a -> TF.Tensor TF.Build a -> TF.Tensor TF.Build a -> TF.Tensor TF.Build a -> TF.Tensor TF.Build a -> TF.Tensor TF.Value a -> TF.Build n)
+  -> (t a -> TF.Tensor TF.Build a)
+  -> (t a -> TF.Tensor TF.Build a -> TF.Build n)
+  -> Minimizer t a TF.Build
 adam'' config initVarZero initVar applyAdam readValue assign = Minimizer
   { minimize = \params grads -> TF.withNameScope "adam" $ do
     let lr = TF.scalar (adamLearningRate config)
