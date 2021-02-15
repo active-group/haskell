@@ -1,4 +1,4 @@
-![Build Status](https://storage.googleapis.com/tensorflow-haskell-kokoro-build-badges/github.png)
+![Build Status](https://storage.googleapis.com/tensorflow-kokoro-build-badges/haskell/github.png)
 
 The tensorflow-haskell package provides Haskell bindings to
 [TensorFlow](https://www.tensorflow.org/).
@@ -61,7 +61,7 @@ fit xData yData = TF.runSession $ do
 
 # Installation Instructions
 
-Note: building this repository with `stack` requires version `2.1.3` or newer.
+Note: building this repository with `stack` requires version `2.3.1` or newer.
 Check your stack version with `stack --version` in a terminal.
 
 ## Build with Docker on Linux
@@ -91,7 +91,7 @@ stack --docker --docker-image=$IMAGE_NAME build --exec Main
 If you want to use GPU you can do:
 
 ```
-IMAGE_NAME=tensorflow/haskell:1.14.0-gpu
+IMAGE_NAME=tensorflow/haskell:2.3.0-gpu
 docker build -t $IMAGE_NAME docker/gpu
 ```
 
